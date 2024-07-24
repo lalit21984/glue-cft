@@ -1,0 +1,8 @@
+{
+ 
+    "eventSource": "glue.amazonaws.com",
+    "eventName": "CreateCrawler",
+    "requestParameters": {
+        "name": "av-dmro-sap-DataCrawler"
+    }
+}

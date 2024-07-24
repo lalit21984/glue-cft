@@ -1,0 +1,31 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "sns:TagResource",
+                "sns:ListTagsForResource",
+                "sns:ListSubscriptionsByTopic",
+                "sns:GetTopicAttributes",
+                "sns:DeleteTopic",
+                "sns:CreateTopic",
+                "sns:SetTopicAttributes",
+                "sns:UntagResource",
+                "sns:Publish",
+                "glue:StartJobRun",
+                "states:StartExecution",
+                "glue:GetJobRun",
+                "sns:Subscribe",
+                "sns:ConfirmSubscription",
+                "glue:GetJobRuns"
+            ],
+            "Resource": [
+                "arn:aws:states:us-east-1:xxxx:stateMachine:*",
+                "arn:aws:sns:us-east-1:xxxx:*",
+                "arn:aws:glue:us-east-1:xxxx:job/*"
+            ]
+        }
+    ]
+}

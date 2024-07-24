@@ -1,0 +1,185 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Working with custom resources and S3
+
+Parameters:
+  pRole:
+    Type: String
+    Default: av-dmro-glue-service-role
+    #Default: av-dmro-admin-role
+    Description: "IAM role that is used for Glue Job"
+  pDatabaseName:
+    Type: String
+    Default: av-dmro-sap-aurora-1
+    Description: "Database used for clue catelog"
+
+  ps3scriptpath:
+    Type: String
+    Default: "s3://av-dmro-glue-458793/samplescript.py"
+    Description: "script location of glue-job script file"
+  pRoleArn:
+    Type: String
+    Default: arn:aws:iam::978671394047:role/av-dmro-cloudformation
+    Description: "Role ARN to create Glue Crawler"
+  JDBCConnection:
+    Type: String 
+    Default: av-dmro-sap-test-1
+    Description: "Connection name used for sap database"
+  JDBCPath:
+    Type: String
+    Default: dmro_materials_dev/public/gea_onhand_materials_hana
+    Description: "Database path"
+  S3BucketName:
+    Type: String
+    Description: "S3 bucket to create."
+    Default: "av-dmro-glue52465872345"
+  lambdaexecutionroleArn:
+    Type: String
+    Default: arn:aws:iam::978671394047:role/av-dmro-lambdaexecution_role
+  TableName:
+    Type: String
+    Description: The Data Catalog table representing the Parquet files being converted by the workflow.
+    Default: products
+  WorkflowName:
+    Type: String
+    Description: A data processing pipeline that is comprised of a crawler, jobs, and triggers. This workflow converts uploaded data files into Apache Parquet format.
+    Default: av-dmro-s3trigger_data_conversion_workflow-new
+
+  DatabaseName:
+    Type: String
+    Description: The AWS Glue Data Catalog database that is used to hold the tables created in this walkthrough.
+    Default: event_driven_workflow_tutorial_b
+
+Resources:
+
+  #MyCustomResource:
+  #  Type: AWS::CloudFormation::CustomResource
+  #  Properties:
+  #    ServiceToken: !GetAtt rcrawlertriggerfunction.Arn
+  #    FunctionName: "rcrawlertriggerfunction"
+
+  rScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "schedule"
+      Name: "av-dmro-crawler-schedule"
+      ScheduleExpression: "rate(1 hour)"
+      State: ENABLED
+      Targets:
+        -
+          Arn: arn:aws:states:us-east-1:978671394047:stateMachine:av-dmro-stepfunction-machinename
+          Id: "stepfunction"
+          RoleArn: arn:aws:iam::978671394047:role/av-dmro-glue-service-role
+
+
+
+  rEventBridgeLambdaTriggerRule:
+    #DependsOn:
+      #- av-dmro-glue-service-role
+      #- rCrawlerTriggerLambdaFunction
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub av-dmro-glue_Crawler_trigger_rule-${AWS::StackName}
+      Description: "Event Rule to trigger Crawler"
+      EventPattern:
+        source:
+          - "aws.glue"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "glue.amazonaws.com"
+          eventName:
+            - "CreateCrawler"
+          requestParameters:
+            name: 
+            - "av-dmro-sap-DataCrawler"
+      State: "ENABLED"
+      Targets:
+        -
+          Arn: 
+            Fn::GetAtt:
+              - "rCrawlerTriggerLambdaFunction"
+              - "Arn"
+          Id: "CloudTrailTriggersWorkflow"
+          DeadLetterConfig:
+            Arn: 'arn:aws:sqs:us-east-1:978671394047:eventbridgedead-letterqueue'
+        - 
+          Arn: arn:aws:lambda:us-east-1:978671394047:function:crawler_trigger
+          Id: idcrawler_trigger
+          DeadLetterConfig:
+            Arn: 'arn:aws:sqs:us-east-1:978671394047:eventbridgedead-letterqueue'
+
+  rLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref "rCrawlerTriggerLambdaFunction"
+      Action: "lambda:InvokeFunction"
+      #SourceAccount: !Ref 'AWS::AccountId'
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt:
+          - "rEventBridgeLambdaTriggerRule"
+          - "Arn"
+
+  rCrawlerTriggerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: av-dmro-CrawlerTriggerLambdaFunction
+      Handler: index.handler
+      Runtime: python3.8
+      Code: 
+        ZipFile: |
+          import json
+          import boto3
+          def handler(event, context):
+                crawlername = "av-dmro-sap-DataCrawler"
+                glueclient=boto3.client('glue')
+                runid=glueclient.start_crawler(Name=crawlername)
+                return runid
+
+      Description: Invoke a function to create a log stream.
+      MemorySize: 128
+      Timeout: 8
+      Role: !Ref lambdaexecutionroleArn
+
+
+
+ 
+  rDataCrawler:
+    Type: AWS::Glue::Crawler
+    DependsOn:
+      - rEventBridgeLambdaTriggerRule
+    Properties:
+      Name: av-dmro-sap-DataCrawler
+      Description: Glue crawler which discovers source table schema
+      DatabaseName: !Ref DatabaseName
+      #Role: arn:aws:iam::978671394047:role/GlueServiceRole-glue-event-driven-workflow-tutorial
+      Role: arn:aws:iam::978671394047:role/av-dmro-admin-role
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      Targets:
+        CatalogTargets:
+          - DatabaseName: !Ref DatabaseName
+            Tables:
+            - !Ref SourceTable
+      Configuration: "{\"Version\":1.0,\"Grouping\":{\"TableGroupingPolicy\":\"CombineCompatibleSchemas\"}}"
+  SourceTable:
+    DependsOn: Database
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableInput:
+        Name: !Sub 'source_${TableName}'
+        Description: This AWS Glue Data Catalog table has metadata information about the source data.
+        TableType: EXTERNAL_TABLE
+        StorageDescriptor:
+          Location: !Sub 's3://${S3BucketName}/data/products_raw/'
+  Database:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref DatabaseName
+        Description: This database is used to organize the metadata tables created in this tutorial.

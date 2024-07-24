@@ -1,0 +1,23 @@
+
+           DataCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: "DataCrawler"
+      Description: "Creates Data Crawler for Data"
+      DatabaseName: !Ref pDatabaseName
+      Role: !Ref pRoleArn # Required
+      SchemaChangePolicy:
+        DeleteBehavior: DEPRECATE_IN_DATABASE
+        UpdateBehavior: UPDATE_IN_DATABASE
+      TablePrefix: sap_
+      #Targets:
+      #  JdbcTargets:
+      #    - ConnectionName: ! Ref JDBCConnection
+      #    - Path: !Ref JDBCPath
+
+
+
+  
+
+
+

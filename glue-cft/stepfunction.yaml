@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: step function to move data from SAP hana to Aurora
+
+
+
+Resources:
+#StepFunctions state machine
+  Statemachinename: 
+    Type: AWS::StepFunctions::StateMachine
+    Properties: 
+      StateMachineName: av-dmro-stepfunction-machinename
+      RoleArn: "arn:aws:iam::978671394047:role/av-dmro-glue-service-role"
+      DefinitionString: |-
+        {
+          "Comment": "A description of my state machine",
+          "StartAt": "Glue Job Moving data from SAP to Aurora",
+          "States": 
+            {
+              "Glue Job Moving data from SAP to Aurora": 
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::glue:startJobRun.sync",
+                  "Parameters": 
+                    {
+                      "JobName": "av-dmro-sap-data-ingestion-ver2-test"
+                    },
+                  "Next": "SNS Success",
+                  "Retry": [
+                    {
+                      "ErrorEquals": [
+                        "States.ALL"
+                      ],
+                      "BackoffRate": 2,
+                      "IntervalSeconds": 30,
+                      "MaxAttempts": 3,
+                      "Comment": "Retry with exponential BackOff"
+                    }
+                  ],
+                  "Catch": [
+                    {
+                      "ErrorEquals": [
+                        "States.ALL"
+                      ],
+                      "Comment": "Send SNS error notification",
+                      "Next": "SNS Error"
+                    }
+                  ]
+                },
+              "SNS Error": 
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::sns:publish",
+                  "Parameters": {
+                    "TopicArn": "arn:aws:sns:us-east-1:216344255749:av-dmro-sap-data-ingestion-1",
+                    "Message": "SAP data ingestion failed"
+                  },
+                  "End": true
+                },
+              "SNS Success": 
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::sns:publish",
+                  "Parameters": {
+                    "TopicArn": "arn:aws:sns:us-east-1:216344255749:av-dmro-sap-data-ingestion-1",
+                    "Message": "SAP data ingestion was successful"
+                  },
+                  "End": true
+                }
+            }
+        }

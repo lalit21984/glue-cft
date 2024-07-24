@@ -1,0 +1,66 @@
+rEventBridgeLambdaTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub glue_Crawler_trigger_rule-${AWS::StackName}
+      Description: "Event Rule to trigger Crawler"
+      EventPattern:
+        source:
+          - "aws.glue"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "glue.amazonaws.com"
+          eventName:
+            - "CreateCrawler"
+          requestParameters:
+            name: 
+            - "sap-DataCrawler"
+      State: "ENABLED"
+      Targets:
+        -
+          Arn: 
+            Fn::GetAtt:
+              - "rCrawlerTriggerLambdaFunction"
+              - "Arn"
+          Id: "CloudTrailTriggersWorkflow"
+          DeadLetterConfig:
+            Arn: 'arn:aws:sqs:us-east-1:xxxx:eventbridgedead-letterqueue'
+        - 
+          Arn: arn:aws:lambda:us-east-1:xxxx:function:crawler_trigger
+          Id: idcrawler_trigger
+          DeadLetterConfig:
+            Arn: 'arn:aws:sqs:us-east-1:xxxx:eventbridgedead-letterqueue'
+
+  rLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref "rCrawlerTriggerLambdaFunction"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !Ref rEventBridgeLambdaTriggerRule
+        #Fn::GetAtt:
+        #  - "rEventBridgeLambdaTriggerRule"
+        #  - "Arn"
+
+  rCrawlerTriggerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CrawlerTriggerLambdaFunction
+      Role: !Ref lambdaexecutionroleArn
+      Handler: index.handler
+      Runtime: python3.8
+      Code: 
+        ZipFile: |
+          import json
+          import boto3
+          def handler(event, context):
+                crawlername = "sap-DataCrawler"
+                glueclient=boto3.client('glue')
+                runid=glueclient.start_crawler(Name=crawlername)
+                return runid
+
+      Description: Invoke a function to create a log stream.
+      MemorySize: 128
+      Timeout: 8
+      

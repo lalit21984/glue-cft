@@ -1,0 +1,141 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEfgditor1",
+            "Effect": "Allow",
+            "Action": [
+                "cloudwatch:PutMetricData",
+                "ec2:CreateNetworkInterface",
+                "ec2:DeleteNetworkInterface",
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "VisualEditor08",
+            "Effect": "Allow",
+            "Action": [
+                "s3:CreateBucket",
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::*"
+            ]
+        },
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "s3:DeleteObject",
+                "s3:GetObject",
+                "s3:PutObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::*/*",
+                "arn:aws:s3:::crawler-public*/*"
+            ]
+        },
+        {
+            "Sid": "VisughalEditor1",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:*:*:glue/*",
+                "arn:aws:logs:us-east-1:xxxx:log-group:*",
+                "arn:aws:logs:us-east-1:xxxx:log-group:/aws/*/:"
+            ]
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateNetworkInterface",
+                "ec2:DeleteNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeVpcAttribute",
+                "ec2:DescribeVpcEndpoints"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Sid": "VisualEditor2",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateTags",
+                "ec2:DeleteTags"
+            ],
+            "Condition": {
+                "ForAllValues:StringEquals": {
+                    "aws:TagKeys": [
+                        "aws-glue-service-resource"
+                    ]
+                }
+            },
+            "Resource": [
+                "arn:aws:ec2:*:*:network-interface/*",
+                "arn:aws:ec2:*:*:security-group/*",
+                "arn:aws:ec2:*:*:instance/*"
+            ]
+        },
+        {
+            "Sid": "VisualEdit5or4",
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:GetSecretValue"
+            ],
+            "Resource": [
+                "arn:aws:secretsmanager:us-east-1:xxxx:secret:*"
+            ]
+        },
+        {
+            "Sid": "VisualEditor3",
+            "Effect": "Allow",
+            "Action": [
+                "glue:CreateDatabase",
+                "glue:CreatePartition",
+                "glue:CreateTable",
+                "glue:GetConnection",
+                "glue:GetDatabase",
+                "glue:GetPartitions",
+                "glue:GetTable"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-east-1:xxxx:table/*/*",
+                "arn:aws:glue:us-east-1:xxxx:database/*",
+                "arn:aws:glue:us-east-1:xxxx:catalog"
+            ]
+        },
+        {
+            "Sid": "VisualEditors3",
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetConnection",
+                "glue:GetConnections",
+                "glue:StartCrawler"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-east-1:xxxx:catalog",
+                "arn:aws:glue:us-east-1:xxxx:database/avdmro*",
+                "arn:aws:glue:us-east-1:xxxx:table/*/*",
+                "arn:aws:glue:us-east-1:xxxx:tableVersion/avdmro*",
+                "arn:aws:glue:us-east-1:xxxx:userDefinedFunction/*",
+                "arn:aws:glue:us-east-1:xxxx:connection/*",
+                "arn:aws:glue:us-east-1:xxxx:crawler/*",
+                "arn:aws:glue:us-east-1:xxxx:job/*",
+                "arn:aws:glue:us-east-1:xxxx:trigger/*",
+                "arn:aws:glue:us-east-1:xxxx:devEndpoint/*"
+            ]
+        }
+    ]
+}

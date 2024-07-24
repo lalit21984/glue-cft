@@ -1,0 +1,312 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Working with custom resources and S3
+
+Parameters:
+  pRole:
+    Type: String
+    Default: glue-service-role
+    Description: "IAM role that is used for Glue Job"
+  pDatabaseName:
+    Type: String
+    Default: sap-aurora-db
+    Description: "Database used for clue catelog"
+  ps3scriptpath:
+    Type: String
+    Default: "s3://glue-458793/samplescript.py"
+    Description: "script location of glue-job script file"
+  pCfnRoleArn:
+    Type: String
+    Default: arn:aws:iam::${AWS::AccountId}:role/cloudformation
+    Description: "Role ARN to create Glue Crawler"
+  JDBCConnection:
+    Type: String 
+    Default: sap-jdbc-connection
+    Description: "Connection name used for sap database"
+  JDBCPath:
+    Type: String
+    Default: materials/public/materials_hana
+    Description: "Database path"
+  S3BucketName:
+    Type: String
+    Description: "S3 bucket to create."
+    Default: "glue5246582572345"
+  pGlueServiceRoleArn:
+    Type: String
+    Default: arn:aws:iam::${AWS::AccountId}:role/glue-service-role
+  TableName:
+    Type: String
+    Description: The Data Catalog table representing the Parquet files being converted by the workflow.
+    Default: products
+  DatabaseName:
+    Type: String
+    Description: The AWS Glue Data Catalog database that is used to hold the tables created in this walkthrough.
+    Default: event_driven_workflow_tutorial_b
+
+Resources:
+  EventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "schedule"
+      Name: !Sub "SAP-Ingestion-Schedule"
+      ScheduleExpression: "rate(1 hour)"
+      State: ENABLED
+      Targets:
+        -
+          Arn: !Ref "Statemachine"
+          Id: "glue-stepfunction"
+          RoleArn: arn:aws:iam::${AWS::AccountId}:role/glue-service-role
+  
+  EventBridgeLambdaTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: Crawler-Trigger-Rule
+      Description: "Event Rule to trigger Crawler"
+      EventPattern:
+        source:
+          - "aws.glue"
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "glue.amazonaws.com"
+          eventName:
+            - "CreateCrawler"
+          requestParameters:
+            name: 
+              - SAP-DataCrawler
+      State: "ENABLED"
+      Targets:
+        -
+          Arn: 
+            Fn::GetAtt:
+              - "CrawlerTriggerLambdaFunction"
+              - "Arn"
+          Id: "CrawlerTriggerLambdafunctionId"
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref "CrawlerTriggerLambdaFunction"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt:
+          - "EventBridgeLambdaTriggerRule"
+          - "Arn"
+
+  CrawlerTriggerLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: "Crawler-Trigger"
+      Handler: index.handler
+      Runtime: python3.8
+      Code: 
+        ZipFile: |
+          import json
+          import boto3
+          def handler(event, context):
+                Datacrawler = "SAP-DataCrawler"
+                MetaDatacrawler = "SAP-MetaDataCrawler"
+                glueclient=boto3.client('glue')
+                runid1=glueclient.start_crawler(Name=Datacrawler)
+                runid2=glueclient.start_crawler(Name=MetaDatacrawler)
+                return runid1 runid2
+
+      Description: Invoke a function to create a log stream.
+      MemorySize: 128
+      Timeout: 8
+      Role: !Ref GlueServiceRoleArn
+      VpcConfig:
+        SecurityGroupIds:
+          - sg-xxxx
+        SubnetIds:
+          - subnet-xxxx
+
+
+  JDBCConnection:
+    Type: AWS::Glue::Connection
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      ConnectionInput:
+        ConnectionProperties: {
+          "JDBC_Connection_URL": !Ref JDBCURL,
+          "USERNAME": !Ref Username,
+          "PASSWORD": !REF Password
+        }
+        ConnectionType: "JDBC"
+        PhysicalConnectionRequirements:
+          SecurityGroupIDList:
+            - "sg-xxxx"
+            - "sg-xxxx"
+          SubnetId: "subnet-xxxx"
+          Availabilityzone: 
+            fn::Select:
+              - 0
+              - Fn::GetAZs: ""
+        Description: "JDBC Connection to SAP DB"
+        Name: !Ref JDBCConnectionname
+
+  GlueJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Command:
+        Name: "glueetl"
+        PythonVersion: "3"
+        ScriptLocation: "s3ScriptPath"
+      Connections:
+        Connections:
+          - JDBCConnection
+      DefaultArguments: {
+        "--additional-python-module": "pg800,pyarrow=2,answrangler"
+        "--class": "GlueApp",
+        "glue-aurora-connection-name": !Ref JDBCConnection,
+        "--glue-sap-data-table": "materials_data",
+        "--glue-sap-meta-data-table": "materials_metadata",
+        "secret-name": "secrets",
+        "--Tempdir": "s3Tempbucket",
+        "--enable-continuous-cloudwatch-log": "true",
+        "--enable--glue-datacatalog": "true",
+        "--enable-metrics": "true",
+        "--job-bookmark-option": "job-bookmark-disable",
+        "--job-language": "python",
+        "--enable-spark-ui": "true",
+        "--spark-event-log-path": !Ref s3LogBucket,
+        "--extra-jars": "s3:sap-ingestion/jars/ngdbc.jar"
+      }
+      Description: "description for glue job"
+      GlueVersion: 3.0
+      MaxRetries: 0
+      Name: SAP-Ingestion
+      NumberOfWorkers: 5
+      Role: !Ref "GlueServiceRoleArn"
+      Timeout: 10
+      WorkerType: G.1X
+
+  DataCrawler:
+    Type: AWS::Glue::Crawler
+    DependsOn:
+      - EventBridgeLambdaTriggerRule
+    Properties:
+      Name: SAP-DataCrawler
+      Description: Glue crawler which discovers source table schema
+      DatabaseName: !Ref DatabaseName
+      Role: arn:aws:iam::${AWS::AccountId}:role/glue-service-role
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: DELETE_IN_DATABASE
+      TablePrefix: sap_
+      Targets:
+        JdbcTargets:
+          - ConnectionName: !Ref JDBCConnection
+            Path: !Ref JDBCPath
+
+  DataCrawler:
+    Type: AWS::Glue::Crawler
+    DependsOn:
+      - EventBridgeLambdaTriggerRule
+    Properties:
+      Name: SAP-MetaDataCrawler
+      Description: Glue crawler which discovers source Metadata
+      DatabaseName: !Ref DatabaseName
+      Role: arn:aws:iam::${AWS::AccountId}:role/glue-service-role
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: DELETE_IN_DATABASE
+      TablePrefix: sap_
+      Targets:
+        JdbcTargets:
+          - ConnectionName: !Ref JDBCConnection
+            Path: !Ref JDBCPath
+
+  SNSnotification:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "SNS-Notification"
+      TopicName: "SNS-Notification"
+
+  snsTopicpolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: snstopicpolicy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: snsTopicPermission
+            Effect: Allow
+            Principal:
+              Service:
+                - "states.amazonaws.com"
+            Action:
+              - SNS:Publish
+            Resource: SNSNotification
+      Topics: # Required
+        - !Ref SNSnotification
+
+  SNSEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref "SNSnotification"
+      Protocol: email-json
+      Endpoint: "firstname.lastname@example.com"
+
+  Statemachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !Ref GlueServiceRoleArn
+      StateMachineName: "Glue-Stepfunction"
+      DefinitionString: |-
+        {
+          "StartAt": "Glue Job",
+          "States":
+            {
+              "Glue Job":
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::glue:startJobRun.sync",
+                  "Parameters": {
+                    "JobName": "SAP-Ingestion"
+                    },
+                  "Next": "SNS Success"
+                  "Retry":[
+                    {
+                      "ErrorEquals": [
+                        "States.ALL"
+                      ],
+                      "BackoffRate": 2,
+                      "IntervalSeconds": 30,
+                      "MaxAttempts": 3,
+                      "Comments": "Retry with exponential BackOff"
+                    }
+                  ],
+                  "Catch": [
+                    {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "Comment": "Send SNS error notification",
+                    "Next": "SNS Error"
+                    }
+                  ]
+                },
+              "SNS Error":
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::sns:publish",
+                  "Parameters": {
+                    "TopicArn": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:SNS-Notification",
+                    "Message": "SAP data ingestion failed"
+                  },
+                    "End": true
+                },
+              "SNS Success": 
+                {
+                  "Type": "Task",
+                  "Resource": "arn:aws:states:::sns:publish",
+                  "Parameters": {
+                    "TopicArn": "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:SNS-Notification",
+                    "Message": "SAP Data ingestion successful"
+                    },
+                  "End": true
+                }
+            }
+        }
