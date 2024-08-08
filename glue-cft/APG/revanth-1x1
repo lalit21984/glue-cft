@@ -1,7 +1,0 @@
-systems manager automation actions
-SAM or CDK
-lambda 
-AWS Systems Manager Automation to AWS Statemachine
-DynamanoDB/SQS for inside lambda
-
-publicapi temprature
