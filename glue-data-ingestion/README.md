@@ -155,14 +155,11 @@ Already a pro? Just edit this README.md and make it your own. Want to make it ea
 
 ```
 cd existing_repo
-git remote add origin https://gitlab.aws.dev/lksahu/glue-data-ingestion.git
+git remote add origin https://github-repo/glue-data-ingestion.git
 git branch -M main
 git push -uf origin main
 ```
 
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.aws.dev/lksahu/glue-data-ingestion/-/settings/integrations)
 
 ## Collaborate with your team
 
