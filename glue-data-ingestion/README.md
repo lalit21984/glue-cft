@@ -84,8 +84,6 @@ Code
 
 The code can be cloned from below link 
 
-https://gitlab.aws.dev/lksahu/glue-data-ingestion.git
-
 AWS DevOps
 IAM Roles and Policies
 
